@@ -10,29 +10,56 @@ firebase.initializeApp({
 if ('Notification' in window) {
     var messaging = firebase.messaging();
 
-    if (Notification.permission === 'granted') {
-        subscribe();
+    if (Notification.permission === 'denied') {
+        console.warn('The user has blocked notifications.');
     }
+
+    if (Notification.permission === 'granted') {
+        //...
+    }
+
+    // Handle notification
+    messaging.onMessage(payload => {
+        console.log('Message received. ', payload);
+
+        const data = JSON.parse(payload.data.notification);
+
+        // register fake ServiceWorker for show notification on mobile devices
+        navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        navigator.serviceWorker.ready.then(function(registration) {
+            registration.showNotification(data.title, data);
+        }).catch(function(error) {
+            // registration failed
+            console.error('ServiceWorker registration failed', error);
+        });
+
+        // new Notification(data.title, data);
+    });
 }
 
-function subscribe() {
+function notify() {
     messaging.requestPermission()
         .then(function () {
-            messaging.getToken()
-                .then(function (currentToken) {
-                    console.log(currentToken);
+            const savedToken = window.localStorage.getItem('sentFirebaseMessagingToken');
 
+            if (savedToken !== null && savedToken !== '') {
+                sendNotification(savedToken);
+            } else {
+                // Get registration token. Initially this makes a network call, once retrieved
+                // subsequent calls to getToken will return from cache.
+                messaging.getToken({vapidKey: 'BDckMhqZPwbFtVZNbfvLYG9fqB87OcllXELyfn32Zeu27NDnfsbOMRs8GJuezAnL1u4xCwA-3CgmYS48PFde3tw'}).then((currentToken) => {
                     if (currentToken) {
                         sendTokenToServer(currentToken);
+                        sendNotification(currentToken);
                     } else {
-                        console.warn('Could not get token');
-                        setTokenSentToServer(false);
+                        // Show permission request UI
+                        console.log('No registration token available. Request permission to generate one.');
                     }
-                })
-                .catch(function (err) {
-                    console.warn('Getting token error: ', err);
+                }).catch((err) => {
+                    console.log('An error occurred while retrieving token. ', err);
                     setTokenSentToServer(false);
                 });
+            }
         })
         .catch(function (err) {
             console.warn('Could not get permission for sending notification: ', err);
@@ -64,4 +91,14 @@ function setTokenSentToServer(currentToken) {
         'sentFirebaseMessagingToken',
         currentToken ? currentToken : ''
     );
+}
+
+function sendNotification(token) {
+    fetch(
+        'https://slavik.pythonanywhere.com/api/v1.0/send_notification?user_token='+token
+    ).then(function (response) {
+        console.log(response);
+    }).catch(function (error) {
+        console.error(error);
+    });
 }

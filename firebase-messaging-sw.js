@@ -19,8 +19,11 @@ firebase.initializeApp({
 // Retrieve an instance of Firebase Messaging so that it can handle background messages.
 const messaging = firebase.messaging();
 
-// Handle notification
-messaging.onMessage(function(payload) {
-    console.log('Message received. ', payload);
-    new Notification(payload.notification.title, payload.notification);
+// Handle messages in the background (when the tab is not active)
+messaging.onBackgroundMessage(payload => {
+    console.log('[firebase-messaging-sw.js] Received background message ', payload);
+
+    const data = JSON.parse(payload.data.notification);
+
+    self.registration.showNotification(data.title, data);
 });
